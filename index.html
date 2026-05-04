@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arciform Timer</title>
+
+<style>
+@font-face {
+  font-family: 'Arciform';
+  src: url('https://files.catbox.moe/q3bupi.otf') format('opentype');
+}
+
+body {
+  margin: 0;
+  background: #111;
+  color: #fff;
+  font-family: 'Arciform', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.container {
+  text-align: center;
+}
+
+#display {
+  font-size: 6rem;
+  letter-spacing: 2px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: white;
+  text-align: center;
+  width: 100%;
+  font-family: 'Arciform', sans-serif;
+}
+
+.controls {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  align-items: center;
+}
+
+.circle-btn {
+  font-family: 'Arciform', sans-serif;
+  font-size: 2.4rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.circle-btn:hover {
+  background: #2a2a2a;
+}
+
+.circle-btn:active {
+  background: #3a3a3a;
+}
+
+#startBtn {
+  margin-top: 35px;
+  font-size: 1.6rem;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  padding: 8px 18px;
+  font-family: 'Arciform', sans-serif;
+  transition: background 0.15s ease;
+}
+
+#startBtn:hover {
+  background: #2a2a2a;
+}
+
+#startBtn:active {
+  background: #3a3a3a;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <input id="display" value="00:00" />
+
+  <div class="controls" id="controls">
+    <button class="circle-btn" id="minusBtn">−</button>
+    <button class="circle-btn" id="plusBtn">+</button>
+  </div>
+
+  <button id="startBtn" onclick="startTimer()">Start</button>
+</div>
+
+<script>
+let running = false;
+let interval = null;
+let holdInterval = null;
+
+function parseTime(str) {
+  const parts = str.split(':').map(n => parseInt(n.trim(), 10));
+  if (parts.some(isNaN)) return null;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return null;
+}
+
+function formatTime(s) {
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  return hrs > 0
+    ? `${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
+    : `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+
+function getSeconds() {
+  return parseTime(document.getElementById('display').value) || 0;
+}
+
+function setSeconds(s) {
+  document.getElementById('display').value = formatTime(Math.max(0, s));
+}
+
+function adjust(amount) {
+  if (running) return;
+  let current = getSeconds();
+  current = Math.max(0, current + amount);
+  setSeconds(current);
+}
+
+// HOLD SUPPORT
+function startHold(amount) {
+  if (running) return;
+  adjust(amount);
+  holdInterval = setInterval(() => adjust(amount), 120);
+}
+
+function stopHold() {
+  clearInterval(holdInterval);
+}
+
+function startTimer() {
+  if (running) return;
+
+  let seconds = getSeconds();
+  if (seconds <= 0) return;
+
+  running = true;
+
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('display').blur();
+  document.getElementById('display').readOnly = true;
+
+  interval = setInterval(() => {
+    seconds--;
+    setSeconds(seconds);
+
+    if (seconds <= 0) stopTimer();
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(interval);
+  running = false;
+
+  document.getElementById('controls').style.display = 'flex';
+  document.getElementById('startBtn').style.display = 'inline-block';
+  document.getElementById('display').readOnly = false;
+}
+
+// INPUT FILTER (numbers + colon only)
+const display = document.getElementById('display');
+display.addEventListener('keydown', (e) => {
+  const allowed = ['Backspace','ArrowLeft','ArrowRight','Tab','Delete'];
+  if (allowed.includes(e.key)) return;
+  if (/^[0-9:]$/.test(e.key)) return;
+  e.preventDefault();
+});
+
+// HOLD EVENTS
+const minusBtn = document.getElementById('minusBtn');
+const plusBtn = document.getElementById('plusBtn');
+
+minusBtn.addEventListener('mousedown', () => startHold(-60));
+plusBtn.addEventListener('mousedown', () => startHold(60));
+
+minusBtn.addEventListener('mouseup', stopHold);
+plusBtn.addEventListener('mouseup', stopHold);
+
+minusBtn.addEventListener('mouseleave', stopHold);
+plusBtn.addEventListener('mouseleave', stopHold);
+plusBtn.addEventListener('mouseleave', stopHold);
+
+// touch support
+minusBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(-60); });
+plusBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(60); });
+
+minusBtn.addEventListener('touchend', stopHold);
+plusBtn.addEventListener('touchend', stopHold);
+
+</script>
+</body>
+</html>
