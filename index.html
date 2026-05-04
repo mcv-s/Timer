@@ -33,60 +33,61 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Arciform', sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: background 0.2s ease;
 }
 
-.container {
-  text-align: center;
+/* 🚨 FLASHING RED WHEN DONE */
+body.done {
+  animation: flashRed 0.6s infinite;
 }
 
+@keyframes flashRed {
+  0%   { background: var(--bg); }
+  50% { background: #843f3f; }
+  100% { background: var(--bg); }
+}
+
+   
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: padding-top 0.7s cubic-bezier(0.2,0.8,0.2,1);
+}
+
+body.running .stage {
+  padding-top: 120px;
+}
+
+/* TIMER */
 #display {
   font-size: 6rem;
-  letter-spacing: 2px;
   border: none;
   outline: none;
   background: transparent;
   color: var(--text);
   text-align: center;
-  width: 100%;
   font-family: 'Arciform', sans-serif;
+  transition: transform 0.4s cubic-bezier(0.2,0.8,0.2,1);
 }
 
+/* 🔥 BIGGER WHEN RUNNING */
+body.running #display {
+  transform: scale(1.35);
+}
+
+/* controls */
 .controls {
   margin-top: 40px;
   display: flex;
-  justify-content: center;
   gap: 40px;
-  align-items: center;
-}
-
-.circle-btn {
-  font-family: 'Arciform', sans-serif;
-  font-size: 2.4rem;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  line-height: 1;
-  padding-top: 2px;
-}
-
-.circle-btn:hover {
-  background: var(--btn-hover);
-}
-
-.circle-btn:active {
-  background: var(--btn-active);
+  transition: opacity 0.25s ease, transform 0.7s cubic-bezier(0.2,0.8,0.2,1);
 }
 
 #startBtn {
@@ -98,77 +99,143 @@ body {
   cursor: pointer;
   padding: 8px 18px;
   font-family: 'Arciform', sans-serif;
-  transition: background 0.15s ease;
 }
 
-#startBtn:hover {
-  background: var(--btn-hover);
+.circle-btn {
+  font-size: 2.4rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
 }
 
-#startBtn:active {
-  background: var(--btn-active);
+.circle-btn:hover { background: var(--btn-hover); }
+.circle-btn:active { background: var(--btn-active); }
+
+body.running .controls,
+body.running #startBtn {
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+  margin: 0;
+}
+
+body.running .controls {
+  margin-top: 0;
 }
 </style>
 </head>
 
 <body>
-<div class="container">
-  <input id="display" value="00:00" />
 
-  <div class="controls" id="controls">
+<div class="stage">
+
+  <input id="display" value="00:00" inputmode="text" autocomplete="off" />
+
+  <div class="controls">
     <button class="circle-btn" id="minusBtn">−</button>
     <button class="circle-btn" id="plusBtn">+</button>
   </div>
 
-  <button id="startBtn" onclick="startTimer()">Start</button>
+  <button id="startBtn">Start</button>
+
 </div>
 
 <script>
 let running = false;
+let finished = false;
 let interval = null;
 let holdInterval = null;
 
+const display = document.getElementById('display');
+
+/* -------- INPUT FILTER -------- */
+display.addEventListener('keydown', (e) => {
+  if (running) {
+    e.preventDefault();
+    return;
+  }
+
+  const allowedKeys = [
+    'Backspace','Delete','ArrowLeft','ArrowRight','Tab','Home','End'
+  ];
+
+  if (allowedKeys.includes(e.key)) return;
+
+  if (e.key >= '0' && e.key <= '9') return;
+  if (e.key === ':') return;
+
+  e.preventDefault();
+});
+
+display.addEventListener('input', () => {
+  if (running) return;
+
+  let v = display.value;
+  v = v.replace(/[^0-9:]/g, '');
+
+  const parts = v.split(':');
+  if (parts.length > 3) {
+    v = parts.slice(0, 3).join(':');
+  }
+
+  display.value = v;
+});
+
+/* -------- TIMER LOGIC -------- */
+
 function parseTime(str) {
-  const parts = str.split(':').map(n => parseInt(n.trim(), 10));
-  if (parts.some(isNaN)) return null;
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  const p = str.split(':').map(n => parseInt(n.trim(),10));
+  if (p.some(isNaN)) return null;
+  if (p.length === 2) return p[0]*60 + p[1];
+  if (p.length === 3) return p[0]*3600 + p[1]*60 + p[2];
   return null;
 }
 
 function formatTime(s) {
-  const hrs = Math.floor(s / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  const secs = s % 60;
-  return hrs > 0
-    ? `${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
-    : `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+  const h = Math.floor(s/3600);
+  const m = Math.floor((s%3600)/60);
+  const sec = s%60;
+
+  return h > 0
+    ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+    : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
 
 function getSeconds() {
-  return parseTime(document.getElementById('display').value) || 0;
+  return parseTime(display.value) || 0;
 }
 
 function setSeconds(s) {
-  document.getElementById('display').value = formatTime(Math.max(0, s));
+  display.value = formatTime(Math.max(0,s));
 }
 
-function adjust(amount) {
-  if (running) return;
-  let current = getSeconds();
-  current = Math.max(0, current + amount);
-  setSeconds(current);
-}
+/* -------- RESET -------- */
 
-function startHold(amount) {
-  if (running) return;
-  adjust(amount);
-  holdInterval = setInterval(() => adjust(amount), 120);
-}
-
-function stopHold() {
+function resetUI() {
+  clearInterval(interval);
   clearInterval(holdInterval);
+
+  running = false;
+  finished = false;
+
+  document.body.classList.remove('running','done');
 }
+
+/* -------- FINISH -------- */
+
+function finish() {
+  clearInterval(interval);
+  running = false;
+  finished = true;
+
+  document.body.classList.add('done');
+}
+
+/* -------- START -------- */
 
 function startTimer() {
   if (running) return;
@@ -178,54 +245,67 @@ function startTimer() {
 
   running = true;
 
-  document.getElementById('controls').style.display = 'none';
-  document.getElementById('startBtn').style.display = 'none';
-  document.getElementById('display').blur();
-  document.getElementById('display').readOnly = true;
+  document.body.classList.add('running');
 
   interval = setInterval(() => {
     seconds--;
     setSeconds(seconds);
 
-    if (seconds <= 0) stopTimer();
+    if (seconds <= 0) finish();
   }, 1000);
 }
 
-function stopTimer() {
-  clearInterval(interval);
-  running = false;
+/* -------- CONTROLS -------- */
 
-  document.getElementById('controls').style.display = 'flex';
-  document.getElementById('startBtn').style.display = 'inline-block';
-  document.getElementById('display').readOnly = false;
+function adjust(a) {
+  if (running) return;
+  setSeconds(Math.max(0, getSeconds() + a));
 }
 
-// INPUT FILTER
-const display = document.getElementById('display');
-display.addEventListener('keydown', (e) => {
-  const allowed = ['Backspace','ArrowLeft','ArrowRight','Tab','Delete'];
-  if (allowed.includes(e.key)) return;
-  if (/^[0-9:]$/.test(e.key)) return;
-  e.preventDefault();
+function startHold(a) {
+  if (running) return;
+  adjust(a);
+  holdInterval = setInterval(() => adjust(a), 120);
+}
+
+function stopHold() {
+  clearInterval(holdInterval);
+}
+
+document.getElementById('minusBtn').addEventListener('mousedown', () => startHold(-60));
+document.getElementById('plusBtn').addEventListener('mousedown', () => startHold(60));
+document.getElementById('minusBtn').addEventListener('mouseup', stopHold);
+document.getElementById('plusBtn').addEventListener('mouseup', stopHold);
+
+document.getElementById('startBtn').onclick = startTimer;
+
+/* -------- GLOBAL RESET ON CLICK -------- */
+document.body.addEventListener('click', () => {
+  if (finished || document.body.classList.contains('done')) {
+    resetUI();
+  }
 });
 
-// HOLD EVENTS
-const minusBtn = document.getElementById('minusBtn');
-const plusBtn = document.getElementById('plusBtn');
+/* -------- HOTKEY -------- */
+window.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'r') resetUI();
+});
 
-minusBtn.addEventListener('mousedown', () => startHold(-60));
-plusBtn.addEventListener('mousedown', () => startHold(60));
 
-minusBtn.addEventListener('mouseup', stopHold);
-plusBtn.addEventListener('mouseup', stopHold);
-minusBtn.addEventListener('mouseleave', stopHold);
-plusBtn.addEventListener('mouseleave', stopHold);
 
-minusBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(-60); });
-plusBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(60); });
 
-minusBtn.addEventListener('touchend', stopHold);
-plusBtn.addEventListener('touchend', stopHold);
+
+
+
+/* Prevent focusing */
+display.addEventListener('focus', () => {
+  if (running) display.blur();
+});
+
+
+
+
 </script>
+
 </body>
 </html>
